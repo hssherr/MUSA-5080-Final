@@ -15,6 +15,34 @@ editor_options:
 
 ```{r load-packages}
 if(!require(pacman)){install.packages("pacman"); library(pacman, quietly = T)}
-p_load(tidycensus, tidyverse, sf)
+p_load(lubridate,tidycensus, tidyverse, tigris, sf)
+my
+```
 
+```{r load-data}
+# load evictions dataset to investigate
+evictions_df <- read_csv("./data/philadelphia_monthly_2020_2021.csv", show_col_types = F)
+
+```
+
+```{r load-census-tracts}
+# designate FIPS codes for PA and Philly
+fips_pa <- 42
+fips_phl <- 101
+
+# load tigris census tract boundaries
+tracts <- tracts(state = 42, county = 101, year = 2023, progress_bar = F) %>% 
+  select(GEOID)
+
+# join 
+evictions <- left_join(evictions_df, tracts, by = "GEOID", ) %>% 
+  st_as_sf()
+```
+
+```{r summarize-evictions-data}
+ggplot() +
+    geom_sf(data = evictions, aes(fill = month_rate),
+          color = "white", linewidth = 0.1) +
+  scale_fill_viridis_b(na.value = 'lightgray') +
+  theme_void()
 ```
