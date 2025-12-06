@@ -80,7 +80,8 @@ tracts <- tracts(state = 42, county = 101, year = 2020, progress_bar = F) %>%
 
 # join to evictions dataset and make spatial
 evictions <- left_join(evictions_df, tracts, by = "GEOID", ) %>% 
-  st_as_sf()
+  st_as_sf() %>% 
+  mutate(month_lag_census = year(my(month)) - 2)
 ```
 
 ```{r month-year-cols}
@@ -294,31 +295,23 @@ ggplot() +
 
 ## Crime
 
-```{r}
+```{r load-crime}
 # Path to the main directory that contains the crimeXXXX folders
 crime_main_dir <- "./data/crime/"
 
 # 1. Find all subdirectories matching "crimeXXXX"
 crime_subdirs <- list.dirs(crime_main_dir, full.names = TRUE, recursive = FALSE)
-crime_subdirs <- grep("crime[0-9]{4}", crime_dirs, value = TRUE)
 
 # 2. Find all .shp files inside those directories
-shapefiles <- list.files(crime_dirs, pattern = "\\.shp$", full.names = TRUE)
+crime_files <- list.files(crime_subdirs, pattern = "\\.shp$", full.names = TRUE)
 
 # 3. Read all shapefiles into a list
-shp_list <- lapply(shapefiles, st_read)
-```
+crime_list <- lapply(crime_files, function(x) {
+  st_read(x, quiet = T) %>% 
+    st_transform(2272)
+  }) %>% do.call(rbind, .)
 
-```{r load-crime}
-# read in crime data
-crime_df <- read_csv('./data/incidents_part1_part2.csv', show_col_types = F)
-
-# filter out any entries that don't have a location
-crime_df <- crime_df %>% filter(!if_any(c('point_x', 'point_y', 'lat', 'lng'), is.na))
-
-crime <- crime_df %>% st_as_sf(coords=c('lng', 'lat'), crs=4326) %>%
-  st_transform(2272)
-
+crime <- crime %>% filter(!if_any(c('point_x', 'point_y'), is.na))
 ```
 
 ```{r message=FALSE}
@@ -328,7 +321,7 @@ crime_tract <- st_join(crime, tracts, join = st_intersects) %>%
 
 # create a month/year column
 crime_tract <- crime_tract %>% 
-  mutate(month = format(dispatch_date_time, format = "%m/%Y"))
+  mutate(month = format(dispatch_d, format = "%m/%Y"))
 
 # summarize by the number of each type of crime per census tract per month
 crime_cnts <- crime_tract %>% 
@@ -409,8 +402,5 @@ demo_vars <- map_df(years, function(y) {
 
 ```{r combine-vars}
 
-data_model <- list(
-  evictions %>% st_drop_geometry() %>% select(GEOID, filings_2020, month_date),
-  housing_cnts %>% 
-)
+evictions_trim <- evictions %>% filter(my(month) >= '2022-01-01')
 ```
