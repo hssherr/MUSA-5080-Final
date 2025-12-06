@@ -13,10 +13,23 @@ editor_options:
     wrap: 72
 ---
 
-```{r load-packages}
+# Load Packages
+
+```{r load-packages, message=FALSE}
 if(!require(pacman)){install.packages("pacman"); library(pacman, quietly = T)}
-p_load(lubridate,tidycensus, tidyverse, tigris, sf)
+p_load(lubridate, sf, tidycensus, tidygeocoder, tidyverse, tigris, tmap, viridis)
+
+set.seed(5746)
 ```
+
+# Load Data
+
+## Evictions Dataset
+
+This dataset, derived from the Evictions Lab's Eviction Tracking System.
+City-wide records that had missiong/incorrect GEOIDs are labeled as
+"sealed." This leads to a slight-to-moderate underestimation of
+evictions on average within the dataset.
 
 ```{r load-data}
 # load evictions dataset to investigate
@@ -24,7 +37,36 @@ evictions_df <- read_csv("./data/philadelphia_monthly_2020_2021.csv", show_col_t
 
 evictions_df <- evictions_df %>%
   filter(GEOID != "sealed")
+
 ```
+
+```{r missing-combos-check}
+# generate vectors of all possible months and GEOIDs
+months <- seq(as.Date("2020-01-01"),
+              as.Date("2025-11-01"),
+              by = "month") %>% 
+  format("%m/%Y")
+geoids  <- unique(evictions_df$GEOID)
+
+# expand a grid of GEOID/month combinations
+geoids_months <- expand.grid(GEOID = geoids,
+                             month = months,
+                             stringsAsFactors = F)
+
+# identify missing combinations
+missing <- geoids_months %>% 
+  anti_join(evictions_df %>% select(GEOID, month),
+            by = c("GEOID", "month"))
+
+# print result
+if (nrow(missing) > 0){
+  cat("Number of Missing GEOID/Month Combinations:", nrow(missing))
+} else{
+  cat("No GEOID/Month Combinations Missing")
+}
+```
+
+## Census Tracts
 
 ```{r load-census-tracts}
 # designate FIPS codes for PA and Philly
@@ -32,27 +74,28 @@ fips_pa <- 42
 fips_phl <- 101
 
 # load tigris census tract boundaries
-tracts <- tracts(state = 42, county = 101, year = 2023, progress_bar = F) %>% 
-  select(GEOID)
+tracts <- tracts(state = 42, county = 101, year = 2020, progress_bar = F) %>% 
+  select(GEOID) %>% 
+  st_transform(2272)
 
-# join 
+# join to evictions dataset and make spatial
 evictions <- left_join(evictions_df, tracts, by = "GEOID", ) %>% 
   st_as_sf()
 ```
 
-# Exploratory Data Analysis 
-
-
-```{r summarize-evictions-data}
-ggplot() +
-    geom_sf(data = evictions, aes(fill = filings_avg),
-          color = "white", linewidth = 0.1) +
-  scale_fill_viridis_b(
-  limits = range(evictions$filings_avg, na.rm = TRUE),
-  na.value = "lightgray"
-) +
-  theme_void()
+```{r month-year-cols}
+# manufacture month and year columns, convert existing month column to 'date'
+# evictions <- evictions %>% 
+#   rename(date = month) %>% 
+#   mutate(
+#     month = month(my(date)),
+#     year = year(my(date)),
+#     filings_2020_log = log(filings_2020 + 1)
+#   )
 ```
+
+# Exploratory Data Analysis - Evictions
+
 ```{r create-date-format}
 # Create proper date format
 evictions <- evictions %>%
@@ -120,6 +163,7 @@ ggplot(eviction_monthly, aes(x = month_date, y = total_filings)) +
     caption = "Source: Eviction Court Filings"
   )
 ```
+
 ### Filings Over Time by Racial Majority
 
 ```{r evictions-by-race}
@@ -134,7 +178,7 @@ evictions %>%
   theme_minimal()
 ```
 
-## Discriptive Distributions 
+## Descriptive Distributions
 
 ### Distribution of Monthly Findings
 
@@ -174,7 +218,7 @@ ggplot(evictions, aes(ratio)) +
   )
 ```
 
-## Racial Disparaties 
+## Racial Disparaties
 
 ```{r mean-filings-by-race}
 evictions %>%
@@ -191,3 +235,155 @@ evictions %>%
   theme(legend.position = "none")
 ```
 
+# Import Predictor Data
+
+## Affordable Housing Production/Availability
+
+```{r import-affordable-housing}
+housing_sf <- st_read('./data/Affordable_Housing.geojson', quiet = T) %>% 
+  st_transform(2272)
+
+# filter out properties for which there is no year associated and geometry is not empty
+housing <- housing_sf %>% 
+  filter(!is.na(fiscal_year_complete),
+         !st_is_empty(.)) %>% 
+  st_join(tracts, join = st_within)
+```
+
+```{r viz-affordable-housing}
+ggplot() +
+  geom_sf(data = tracts,
+          fill = NA,
+          color = 'grey70') +
+  geom_sf(data = housing, 
+          mapping = aes(size = total_units),
+          lwd = 0,
+          color = 'purple4',
+          alpha = 0.25) +
+  labs(title = "Affordable Housing in Philadelphia",
+       subtitle = "Locations and Total Unit Counts",
+       size = 'Total Units') +
+  theme_void()
+```
+
+Create summary counts of the number of affordable housing units have
+been constructed per census tract up to the year. Also create an
+indicator variable showing if there was affordable housing built in the
+census tract.
+
+```{r message=FALSE}
+housing_cnts <- housing %>% 
+  st_drop_geometry() %>% 
+  group_by(GEOID, fiscal_year_complete) %>% 
+  summarise(n_proj = n(),
+            total_units = sum(total_units)) %>%
+  mutate(n_proj_cum = ave(n_proj, FUN = cumsum),
+         total_units_cum = ave(total_units, FUN = cumsum)) %>% 
+  filter(fiscal_year_complete >= 2020) %>% 
+  left_join(tracts, by = "GEOID") %>% 
+  st_as_sf(crs = 2272)
+```
+
+```{r}
+ggplot() +
+  geom_sf(data = tracts, color = 'grey85', fill = NA) +
+  geom_sf(data = housing_cnts, aes(fill = total_units_cum)) + 
+  facet_wrap(~fiscal_year_complete) +
+  theme_void()
+```
+
+## Crime
+
+```{r load-crime}
+# read in crime data
+crime_df <- read_csv('./data/incidents_part1_part2.csv', show_col_types = F)
+
+# filter out any entries that don't have a location
+crime_df <- crime_df %>% filter(!if_any(c('point_x', 'point_y', 'lat', 'lng'), is.na))
+
+crime <- crime_df %>% st_as_sf(coords=c('lng', 'lat'), crs=4326) %>%
+  st_transform(2272)
+
+```
+
+```{r message=FALSE}
+# join tract geoid to crimes and filter out those not in Philly
+crime_tract <- st_join(crime, tracts, join = st_intersects) %>% 
+  filter(!is.na(GEOID))
+
+# summarize by the number of each type of crime per census tract
+crime_cnts <- crime_tract %>% 
+  st_drop_geometry() %>% 
+  group_by(GEOID, text_general_code) %>% 
+  summarise(count = n()) %>% 
+  ungroup() %>%  
+  complete(data = ., GEOID, text_general_code, fill = list(count = 0))
+```
+
+## Market Value Analysis
+
+```{r}
+# read in results of 
+mva <- st_read('./data/mva_2023.geojson', quiet = T) %>%
+  st_transform(2272)
+
+# the data is at the block group level
+# GEOID (12 digits) = tract (11 digits) + block grp (1 digit)
+mva <- mva %>% 
+  mutate(GEOID_Tract = substr(geoid, 1, nchar(geoid)-1))
+```
+
+## Housing Counseling Agencies
+
+```{r}
+# create k-nearest neighbors function
+get_knn_distance <- function(dist_matrix, k) {
+  apply(dist_matrix, 1, function(distances) {
+    mean(as.numeric(sort(distances)[1:k]))
+  })
+}
+```
+
+```{r}
+# load housing counseling agency locations
+hca <- st_read('./data/HousingCounselingAgencies.geojson', quiet = T) %>% 
+  st_transform(2272)
+
+# create centroids for each tract to calculate distances
+tracts_cent <- tracts %>% 
+  st_centroid()
+
+# claculate distance matrix
+hca_distmatrix <- st_distance(tracts_cent, hca)
+
+# distance to the nearest 1 and nearest 3 HCAs
+hca_dist <- tracts %>% 
+  mutate(dist_1hca = get_knn_distance(hca_distmatrix, k = 1),
+         dist_3hca = get_knn_distance(hca_distmatrix, k = 3))
+```
+
+## Census Demographic Variables
+
+```{r}
+years <- c(2020:2023)
+
+vars <- c('pop_tot' = 'B01003_001',   # total tract population
+          'pop_white' = 'B02001_002', # white population (for %-non-white calc)
+          'units_tot' = 'B25001_001', # total housing units
+          'hh_tot' = 'B11001_001',    # total households
+          'hh_fam' = 'B11001_002')    # family households)
+
+demo_vars <- map_df(years, function(y) {
+  get_acs(
+    geography = "tract",
+    variables = vars,
+    year = y,
+    survey = "acs5",
+    state = fips_pa,
+    county = fips_phl,
+    progress_bar = F
+  ) %>%
+  mutate(year = y)
+})
+
+```
