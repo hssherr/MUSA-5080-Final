@@ -294,6 +294,21 @@ ggplot() +
 
 ## Crime
 
+```{r}
+# Path to the main directory that contains the crimeXXXX folders
+crime_main_dir <- "./data/crime/"
+
+# 1. Find all subdirectories matching "crimeXXXX"
+crime_subdirs <- list.dirs(crime_main_dir, full.names = TRUE, recursive = FALSE)
+crime_subdirs <- grep("crime[0-9]{4}", crime_dirs, value = TRUE)
+
+# 2. Find all .shp files inside those directories
+shapefiles <- list.files(crime_dirs, pattern = "\\.shp$", full.names = TRUE)
+
+# 3. Read all shapefiles into a list
+shp_list <- lapply(shapefiles, st_read)
+```
+
 ```{r load-crime}
 # read in crime data
 crime_df <- read_csv('./data/incidents_part1_part2.csv', show_col_types = F)
@@ -311,13 +326,17 @@ crime <- crime_df %>% st_as_sf(coords=c('lng', 'lat'), crs=4326) %>%
 crime_tract <- st_join(crime, tracts, join = st_intersects) %>% 
   filter(!is.na(GEOID))
 
-# summarize by the number of each type of crime per census tract
+# create a month/year column
+crime_tract <- crime_tract %>% 
+  mutate(month = format(dispatch_date_time, format = "%m/%Y"))
+
+# summarize by the number of each type of crime per census tract per month
 crime_cnts <- crime_tract %>% 
   st_drop_geometry() %>% 
-  group_by(GEOID, text_general_code) %>% 
+  group_by(GEOID, month) %>% 
   summarise(count = n()) %>% 
   ungroup() %>%  
-  complete(data = ., GEOID, text_general_code, fill = list(count = 0))
+  complete(data = ., GEOID, month, fill = list(count = 0))
 ```
 
 ## Market Value Analysis
@@ -386,4 +405,12 @@ demo_vars <- map_df(years, function(y) {
   mutate(year = y)
 })
 
+```
+
+```{r combine-vars}
+
+data_model <- list(
+  evictions %>% st_drop_geometry() %>% select(GEOID, filings_2020, month_date),
+  housing_cnts %>% 
+)
 ```
