@@ -1,0 +1,43 @@
+---
+title: "Predicting Eviction Risk in Philadelphia"
+subtitle: "Planning Policy Predictions, LLC"
+author: "Henry, Nina, Chloe, Ryan"
+format:
+  revealjs:
+    css: styles/style.css
+    slide-number: true
+editor: visual
+---
+
+## Who We Are
+
+We are a team of advanced planners, working in tandem to solve Philadelphia's most pressing issues. Our skills span across data analysis, policy analysis, design, and more. We are motivated by questions of justice and seek to blend technical solutions with policy know-how.
+
+## The Problem
+
+In the last year, 13,499 eviction claims have been filed against households in Philadelphia.
+
+-   Eviction fuels cycles of poverty, crime, and neighborhood decline, disproportionately impacting communities of color - especially majority-Black neighborhoods
+
+-   Families facing eviction experience ongoing housing instability, often relocating to lower-quality or disadvantaged areas
+
+## The Problem
+
+-   High-eviction neighborhoods cluster, intensifying community-wide effects
+
+-   Frequent turnover weakens social cohesion, making it harder for residents to maintain safety and manage shared spaces
+
+-   Weakened networks contribute to higher crime and greater distrust in government and civic institutions
+
+## How Eviction Works
+
+![](images/flowchart1.png){fig-align="center" width="100%"}
+
+## Our Research Question
+
+How can we better predict where evictions will occur, so that we can effectively mobilize resources to prevent them?
+
+- Allow for the targeted allocation of limited resources
+- Inform policies and programs, especially preventative policies 
+- Encourage construction of more affordable housing
+
