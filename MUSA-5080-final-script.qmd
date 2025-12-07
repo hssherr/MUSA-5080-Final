@@ -611,5 +611,319 @@ evictions_trim <- evictions %>% filter(my(month) >= '2022-01-01') %>%
 data_1 <- left_join(evictions_trim, crime_cnts, by = c('GEOID', 'month'))
 data_2 <- left_join(data_1, hca_dist %>% st_drop_geometry(), by = 'GEOID')
 data_3 <- left_join(data_2, mva_ranks, by = 'GEOID')
-data_model <- left_join(data_3, demo_vars, by = 'year_lag_census')
+data_model <- left_join(data_3, demo_vars,   by = c("GEOID", "year_lag_census")
+)
 ```
+
+#Predictive Modelling
+
+Building complexity over multiple models 
+
+#create lag variables
+
+```{r lag and rolling average prep}
+
+data_model <- data_model %>%
+  arrange(GEOID, month_date) %>%
+  group_by(GEOID) %>%
+  mutate(
+    # one month and two month lags
+    lag_1 = lag(filings_2020, 1),
+    lag_2 = lag(filings_2020, 2),
+
+  ) %>%
+  ungroup()
+
+
+
+```
+
+#Split Train/Test
+
+```{r prep for modelling}
+
+# split date
+split_date <- as.Date("2024-01-01")
+
+# Ensure month_date is a proper date
+data_model <- data_model %>%
+  mutate(month_date = as.Date(month_date))
+
+# Temporal split
+train_data <- data_model %>%
+  filter(month_date < split_date)
+
+test_data <- data_model %>%
+  filter(month_date >= split_date)
+
+# Check split sizes and ranges
+nrow(train_data)
+nrow(test_data)
+
+summary(train_data$month_date)
+summary(test_data$month_date)
+
+
+```
+#Model 0 Baseline 
+
+```{r add variables}
+
+model_0 <- lm(
+  filings_2020 ~  filings_avg + filings_avg_prepandemic_baseline,
+  data = train_data
+)
+
+summary(model_0)
+
+```
+
+
+#Model 1 Demographics 
+
+```{r demographics }
+
+# Model 1: baseline + ACS demographic predictors
+train_data <- train_data %>%
+  mutate(
+    pct_nonwhite = 1 - (pop_whiteE / pop_totE),
+    hh_fam_share = hh_famE / hh_totE,
+    units_per_hh = units_totE / hh_totE
+  )
+
+test_data <- test_data %>%
+  mutate(
+    pct_nonwhite = 1 - (pop_whiteE / pop_totE),
+    hh_fam_share = hh_famE / hh_totE,
+    units_per_hh = units_totE / hh_totE
+  )
+
+```
+
+```{r Model 1}
+model_1 <- lm(
+  filings_2020 ~ 
+    filings_avg_prepandemic_baseline +  # baseline anchor
+    pop_totE +
+    pct_nonwhite +
+    hh_totE +
+    hh_fam_share +
+    units_totE +
+    units_per_hh,
+  data = train_data
+)
+
+summary(model_1)
+
+
+```
+
+
+#Model 2 Crime
+
+```{r model prep crime}
+
+train_data <- train_data %>%
+  mutate(crime_cnt = as.numeric(count))
+
+test_data <- test_data %>%
+  mutate(crime_cnt = as.numeric(count))
+
+
+```
+
+```{r crime}
+
+model_2 <- lm(
+  filings_2020 ~ 
+    filings_avg_prepandemic_baseline + 
+    pop_totE +
+    pct_nonwhite +
+    hh_totE +
+    hh_fam_share +
+    units_totE +
+    units_per_hh +
+    crime_cnt,
+  data = train_data
+)
+
+summary(model_2)
+
+
+```
+
+
+#Model 3 HCA Distances 
+
+```{r HCA prep}
+train_data <- train_data %>%
+  mutate(
+    dist_1hca = as.numeric(dist_1hca),
+    dist_3hca = as.numeric(dist_3hca)
+  )
+
+test_data <- test_data %>%
+  mutate(
+    dist_1hca = as.numeric(dist_1hca),
+    dist_3hca = as.numeric(dist_3hca)
+  )
+
+
+```
+
+
+```{r HCA}
+
+model_3 <- lm(
+  filings_2020 ~ 
+    filings_avg_prepandemic_baseline + 
+    pop_totE +
+    pct_nonwhite +
+    hh_totE +
+    hh_fam_share +
+    units_totE +
+    units_per_hh +
+    crime_cnt +       
+    dist_1hca +         
+    dist_3hca,          
+  data = train_data
+)
+
+summary(model_3)
+
+```
+
+
+#Model 4 Affordable Housing and mva 
+
+#still need to add count to affordable housing but need to change name of column 
+
+```{r mva prep}
+train_data <- train_data %>%
+  mutate(rank = factor(rank))
+
+test_data <- test_data %>%
+  mutate(rank = factor(rank))
+
+test_data$rank <- factor(test_data$rank, levels = levels(train_data$rank))
+
+```
+
+```{r affordable housing and mva}
+model_4 <- lm(
+  filings_2020 ~ 
+    filings_avg_prepandemic_baseline + 
+    pop_totE +
+    pct_nonwhite +
+    hh_totE +
+    hh_fam_share +
+    units_totE +
+    units_per_hh +
+    crime_cnt +
+    dist_1hca +
+    dist_3hca +
+    rank,                
+  data = train_data
+)
+
+summary(model_4)
+
+```
+
+
+#Model 6 Eviction Lags
+
+
+```{r temporal variables}
+
+model_5 <- lm(
+  filings_2020 ~ 
+    filings_avg_prepandemic_baseline +
+    pop_totE + pct_nonwhite + hh_totE + hh_fam_share +
+    units_totE + units_per_hh +
+    crime_cnt +
+    dist_1hca + dist_3hca +
+    rank +
+    lag_1 +
+    lag_2,
+  data = train_data
+)
+
+summary(model_5)
+
+
+```
+
+
+
+# Calculate Predictions and MAE
+```{r calculate_mae_evictions}
+# Generate predictions
+test_data <- test_data %>%
+  mutate(
+    pred_0 = predict(model_0, newdata = .),
+    pred_1 = predict(model_1, newdata = .),
+    pred_2 = predict(model_2, newdata = .),
+    pred_3 = predict(model_3, newdata = .),
+    pred_4 = predict(model_4, newdata = .),
+    pred_5 = predict(model_5, newdata = .)
+  )
+
+# Build MAE results table
+mae_results <- tibble::tibble(
+  Model = c(
+    "0. Baseline",
+    "1. + Demographics",
+    "2. + Crime",
+    "3. + HCA Distance",
+    "4. + MVA Rank",
+    "5. + Lags"
+  ),
+  MAE = c(
+    mean(abs(test_data$filings_2020 - test_data$pred_0), na.rm = TRUE),
+    mean(abs(test_data$filings_2020 - test_data$pred_1), na.rm = TRUE),
+    mean(abs(test_data$filings_2020 - test_data$pred_2), na.rm = TRUE),
+    mean(abs(test_data$filings_2020 - test_data$pred_3), na.rm = TRUE),
+    mean(abs(test_data$filings_2020 - test_data$pred_4), na.rm = TRUE),
+    mean(abs(test_data$filings_2020 - test_data$pred_5), na.rm = TRUE)
+  )
+)
+
+# Show table
+knitr::kable(
+  mae_results,
+  digits = 3,
+  caption = "Mean Absolute Error by Model (Test Set)",
+  col.names = c("Model", "MAE (filings)")
+)
+```
+
+
+# Visualize Model Comparison 
+```{r visualize model comparison}
+
+mae_results <- mae_results %>%
+  mutate(Model = factor(Model, levels = Model))
+
+ggplot(mae_results, aes(x = Model, y = MAE)) +
+  geom_col() +
+  geom_text(aes(label = round(MAE, 2)), vjust = -0.3, size = 3) +
+  labs(
+    title = "Test-Set MAE by Model",
+    x = "Model",
+    y = "MAE (filings)"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 30, hjust = 1)
+  )
+```
+
+
+#Spatial Errors 
+
+TBD 
+
+#Temporal Errors
+
+TBD
