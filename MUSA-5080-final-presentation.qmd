@@ -37,7 +37,18 @@ In the last year, 13,499 eviction claims have been filed against households in P
 
 How can we better predict where evictions will occur, so that we can effectively mobilize resources to prevent them?
 
-- Allow for the targeted allocation of limited resources
-- Inform policies and programs, especially preventative policies 
-- Encourage construction of more affordable housing
+-   Allow for the targeted allocation of limited resources
+-   Inform policies and programs, especially preventative policies
+-   Encourage construction of more affordable housing
 
+## Where Are Evictions Happening?
+
+![](images/ebytract.png){fig-align="center" width="100%"}
+
+## How Many Filings Occur Per Month?
+
+![](images/emonth.png){fig-align="center" width="100%"}
+
+## Who Are These Evictions Affecting?
+
+![](images/etractrace.png){fig-align="center" width="100%"}
