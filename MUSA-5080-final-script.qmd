@@ -81,7 +81,8 @@ tracts <- tracts(state = 42, county = 101, year = 2020, progress_bar = F) %>%
 # join to evictions dataset and make spatial
 evictions <- left_join(evictions_df, tracts, by = "GEOID", ) %>% 
   st_as_sf() %>% 
-  mutate(month_lag_census = year(my(month)) - 2)
+  mutate(year = year(my(month)),
+         year_lag_census = year(my(month)) - 2)
 ```
 
 ```{r month-year-cols}
@@ -311,7 +312,7 @@ crime_list <- lapply(crime_files, function(x) {
     st_transform(2272)
   }) %>% do.call(rbind, .)
 
-crime <- crime %>% filter(!if_any(c('point_x', 'point_y'), is.na))
+crime <- crime_list %>% filter(!if_any(c('point_x', 'point_y'), is.na))
 ```
 
 ```{r message=FALSE}
@@ -342,7 +343,26 @@ mva <- st_read('./data/mva_2023.geojson', quiet = T) %>%
 # the data is at the block group level
 # GEOID (12 digits) = tract (11 digits) + block grp (1 digit)
 mva <- mva %>% 
-  mutate(GEOID_Tract = substr(geoid, 1, nchar(geoid)-1))
+  mutate(GEOID = substr(geoid, 1, 11),
+         clusterletter = ifelse(clusterletter == " ", NA, clusterletter))
+
+# determine the dominant 
+mva_ranks <- mva %>% 
+  st_drop_geometry() %>% 
+  group_by(GEOID) %>% 
+  summarise(
+    rank = {
+      x <- na.omit(clusterletter)     # remove NA
+      if (length(x) == 0) {
+        NA_character_                # if no letters, return NA
+      } else {
+        tbl <- table(x)
+        max_letters <- names(tbl)[tbl == max(tbl)]
+        sort(max_letters)[1]
+      }
+    },
+    .groups = "drop"
+  )
 ```
 
 ## Housing Counseling Agencies
@@ -356,7 +376,7 @@ get_knn_distance <- function(dist_matrix, k) {
 }
 ```
 
-```{r}
+```{r warning=FALSE}
 # load housing counseling agency locations
 hca <- st_read('./data/HousingCounselingAgencies.geojson', quiet = T) %>% 
   st_transform(2272)
@@ -376,31 +396,41 @@ hca_dist <- tracts %>%
 
 ## Census Demographic Variables
 
-```{r}
+```{r message=FALSE}
+# create a vector of years to pull from the census
 years <- c(2020:2023)
 
+# save vars and their column names to pull
 vars <- c('pop_tot' = 'B01003_001',   # total tract population
           'pop_white' = 'B02001_002', # white population (for %-non-white calc)
           'units_tot' = 'B25001_001', # total housing units
           'hh_tot' = 'B11001_001',    # total households
           'hh_fam' = 'B11001_002')    # family households)
 
+# pull demographic variables for all specified years and add a year column
 demo_vars <- map_df(years, function(y) {
   get_acs(
     geography = "tract",
     variables = vars,
     year = y,
     survey = "acs5",
+    output = 'wide',
     state = fips_pa,
     county = fips_phl,
     progress_bar = F
   ) %>%
-  mutate(year = y)
+  mutate(year_lag_census = y)
 })
 
 ```
 
 ```{r combine-vars}
+# isolate evictions in 2022 or later, removing unnecessary columns
+evictions_trim <- evictions %>% filter(my(month) >= '2022-01-01') %>% 
+  select(-c(type, last_updated))
 
-evictions_trim <- evictions %>% filter(my(month) >= '2022-01-01')
+data_1 <- left_join(evictions_trim, crime_cnts, by = c('GEOID', 'month'))
+data_2 <- left_join(data_1, hca_dist %>% st_drop_geometry(), by = 'GEOID')
+data_3 <- left_join(data_2, mva_ranks, by = 'GEOID')
+data_model <- left_join(data_3, demo_vars, by = 'year_lag_census')
 ```
