@@ -333,6 +333,88 @@ crime_cnts <- crime_tract %>%
   complete(data = ., GEOID, month, fill = list(count = 0))
 ```
 
+## Crime EDA
+```{r message=FALSE}
+# Fix date format
+crime_cnts <- crime_cnts %>% 
+  mutate(
+    month_date = as.Date(paste0("01/", month), format = "%d/%m/%Y"),
+    year = lubridate::year(month_date)
+  )
+
+# Crimes Over Time in Philadelphia
+crime_cnts %>% 
+  group_by(month_date) %>% 
+  summarise(total_crime = sum(count)) %>% 
+  ggplot(aes(month_date, total_crime)) +
+  geom_line(color = "firebrick") +
+  labs(
+    title = "Total Crime Over Time (Citywide)",
+    x = "Month",
+    y = "Incidents"
+  ) +
+  theme_minimal()
+```
+
+```{r message=FALSE}
+crime_totals <- crime_cnts %>% 
+  group_by(GEOID) %>% 
+  summarise(total_crime = sum(count))
+
+ggplot(crime_totals, aes(total_crime)) +
+  geom_histogram(bins = 30, fill = "steelblue", color = "white") +
+  labs(
+    title = "Distribution of Total Crime Counts Across Census Tracts",
+    x = "Total Crime (2022–2025)",
+    y = "Number of Tracts"
+  ) +
+  theme_minimal()
+```
+
+```{r message=FALSE}
+#Yearly Crime
+crime_yearly <- crime_cnts %>% 
+  group_by(GEOID, year) %>% 
+  summarise(total_crime = sum(count), .groups = "drop") %>% 
+  left_join(tracts, by = "GEOID") %>% 
+  st_as_sf()
+
+ggplot(crime_yearly) +
+  geom_sf(aes(fill = total_crime),
+          color = "grey80",
+          linewidth = 0.1) +
+  facet_wrap(~ year) +
+  scale_fill_viridis_c(na.value = "grey95") +
+  labs(
+    title = "Crime Counts by Census Tract (Annual)",
+    subtitle = "Exploratory spatial analysis",
+    fill = "Crime count"
+  ) +
+  theme_void()
+
+# Census tracts with the most crime
+crime_totals_ranked <- crime_cnts %>% 
+  group_by(GEOID) %>% 
+  summarise(total_crime = sum(count)) %>% 
+  arrange(desc(total_crime))
+
+head(crime_totals_ranked, 10)
+
+# Total crime counts per census tract from 2022-2025
+crime_map <- tracts %>% left_join(crime_totals_ranked, by = "GEOID")
+
+ggplot(crime_map) +
+  geom_sf(aes(fill = total_crime),
+          color = "grey80",
+          linewidth = 0.1) +
+  scale_fill_viridis_c(na.value = "grey95") +
+  labs(
+    title = "Total Crime by Census Tract",
+    subtitle = "2022-2025",
+    fill = "Crime count"
+  ) +
+  theme_void()
+```
 ## Market Value Analysis
 
 ```{r}
@@ -365,6 +447,47 @@ mva_ranks <- mva %>%
   )
 ```
 
+### Market Value Analysis - EDA
+```{r}
+mva_ranks %>% 
+  summarise(
+    n_tracts = n_distinct(GEOID),
+    n_missing = sum(is.na(rank)),
+    n_categories = n_distinct(rank, na.rm = TRUE)
+  )
+
+table(mva_ranks$rank)
+
+prop.table(table(mva_ranks$rank))
+
+# Most common MVA categories
+ggplot(mva_ranks, aes(rank)) +
+  geom_bar(fill = "steelblue") +
+  labs(
+    title = "Distribution of MVA Cluster Categories",
+    x = "MVA Cluster",
+    y = "Number of Census Tracts"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+# MVA dominant cluster by tract
+mva_ranks_sf <- tracts %>% 
+  left_join(mva_ranks, by = "GEOID")
+
+ggplot(mva_ranks_sf) +
+  geom_sf(aes(fill = rank), 
+          color = "grey80",
+          linewidth = 0.1) +
+  scale_fill_brewer(palette = "Spectral", direction = -1, na.value = "grey90") +
+  labs(
+    title = "Market Value Analysis (MVA) — Dominant Cluster by Tract",
+    subtitle = "Exploratory spatial visualization",
+    fill = "Cluster"
+  ) +
+  theme_void()
+```
 ## Housing Counseling Agencies
 
 ```{r}
@@ -392,6 +515,62 @@ hca_distmatrix <- st_distance(tracts_cent, hca)
 hca_dist <- tracts %>% 
   mutate(dist_1hca = get_knn_distance(hca_distmatrix, k = 1),
          dist_3hca = get_knn_distance(hca_distmatrix, k = 3))
+```
+
+### Housing Counseling Agencies - EDA
+```{r warning=FALSE}
+# Histogram Distance to nearest HCA
+ggplot(hca_dist, aes(dist_1hca)) +
+  geom_histogram(bins = 40, fill = "purple", color = "white") +
+  theme_minimal() +
+  labs(
+    title = "Distribution of Distance to Nearest HCA",
+    x = "Distance (meters)",
+    y = "Number of Census Tracts"
+  )
+
+# Histogram Distance to nearest 3 HCA's
+ggplot(hca_dist, aes(dist_3hca)) +
+  geom_histogram(bins = 40, fill = "darkgreen", color = "white") +
+  theme_minimal() +
+  labs(
+    title = "Distribution of Distance to 3 Nearest HCAs",
+    x = "Distance (meters)",
+    y = "Number of Census Tracts"
+  )
+
+#Scatterplot dist_1 vs. dist_2
+ggplot(hca_dist, aes(dist_1hca, dist_3hca)) +
+  geom_point(alpha = 0.6, color = "purple") +
+  theme_minimal() +
+  labs(
+    title = "Relationship Between 1-HCA and 3-HCA Distances",
+    x = "Distance to nearest HCA",
+    y = "Mean distance to 3 nearest HCAs"
+  )
+
+```
+```{r warning=FALSE}
+# Map dist to nearest HCA
+ggplot(hca_dist) +
+  geom_sf(aes(fill = dist_1hca), color = "grey80") +
+  scale_fill_viridis_c() +
+  theme_void() +
+  labs(
+    title = "Distance to Nearest Housing Counseling Agency",
+    fill = "Meters"
+  )
+
+# Map dist to nearest 3 HCA
+ggplot(hca_dist) +
+  geom_sf(aes(fill = dist_3hca), color = "grey80") +
+  scale_fill_viridis_c() +
+  theme_void() +
+  labs(
+    title = "Distance to 3 Nearest Housing Counseling Agencies",
+    fill = "Meters"
+  )
+
 ```
 
 ## Census Demographic Variables
