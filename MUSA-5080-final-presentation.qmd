@@ -21,13 +21,9 @@ In the last year, 13,499 eviction claims have been filed against households in P
 
 -   Families facing eviction experience ongoing housing instability, often relocating to lower-quality or disadvantaged areas
 
-## The Problem
+##
 
--   High-eviction neighborhoods cluster, intensifying community-wide effects
-
--   Frequent turnover weakens social cohesion, making it harder for residents to maintain safety and manage shared spaces
-
--   Weakened networks contribute to higher crime and greater distrust in government and civic institutions
+![](images/etractrace.png){fig-align="center" width="100%"}
 
 ## How Eviction Works
 
@@ -41,14 +37,24 @@ How can we better predict where evictions will occur, so that we can effectively
 -   Inform policies and programs, especially preventative policies
 -   Encourage construction of more affordable housing
 
+## Data Sources and Method
+::::: columns
+::: {.column width="50%"}
+![](images/data1.png){fig-align="center" width="100%"}
+:::
+::: {.column width="50%"}
+- Joined by Census tract GEOID and month, using 2020 tracts as the spatial base
+- Trained on 2022-2023 data to predict 2024 outcomes
+:::
+:::::
+
+## Our Model 
+We used a linear regression model for our prediction for transparency and ease of interpretation. Linear regression worked well with the size of the dataset, standardized nature of measurements, and predictors with known relationships in eviction literature. It is a stable model that avoids over-fitting. Fundamentally, the iterative and transparent nature of our method is optimal for policy-makers and mitigating equity concerns. 
+
 ## Where Are Evictions Happening?
 
 ![](images/ebytract.png){fig-align="center" width="100%"}
 
-## How Many Filings Occur Per Month?
 
-![](images/emonth.png){fig-align="center" width="100%"}
 
-## Who Are These Evictions Affecting?
 
-![](images/etractrace.png){fig-align="center" width="100%"}

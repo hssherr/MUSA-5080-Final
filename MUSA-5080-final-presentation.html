@@ -152,14 +152,10 @@ Henry, Nina, Chloe, Ryan
 <li><p>Families facing eviction experience ongoing housing instability, often relocating to lower-quality or disadvantaged areas</p></li>
 </ul>
 </section>
-<section id="the-problem-1" class="slide level2">
-<h2>The Problem</h2>
-<ul>
-<li><p>High-eviction neighborhoods cluster, intensifying community-wide effects</p></li>
-<li><p>Frequent turnover weakens social cohesion, making it harder for residents to maintain safety and manage shared spaces</p></li>
-<li><p>Weakened networks contribute to higher crime and greater distrust in government and civic institutions</p></li>
-</ul>
-</section>
+<section id="section" class="slide level2">
+<h2></h2>
+
+<img data-src="images/etractrace.png" class="quarto-figure quarto-figure-center r-stretch" style="width:100.0%"></section>
 <section id="how-eviction-works" class="slide level2">
 <h2>How Eviction Works</h2>
 
@@ -173,19 +169,31 @@ Henry, Nina, Chloe, Ryan
 <li>Encourage construction of more affordable housing</li>
 </ul>
 </section>
+<section id="data-sources-and-method" class="slide level2">
+<h2>Data Sources and Method</h2>
+<div class="columns">
+<div class="column" style="width:50%;">
+<div class="quarto-figure quarto-figure-center">
+<figure>
+<p><img data-src="images/data1.png" class="quarto-figure quarto-figure-center" style="width:100.0%"></p>
+</figure>
+</div>
+</div><div class="column" style="width:50%;">
+<ul>
+<li>Joined by Census tract GEOID and month, using 2020 tracts as the spatial base</li>
+<li>Trained on 2022-2023 data to predict 2024 outcomes</li>
+</ul>
+</div></div>
+</section>
+<section id="our-model" class="slide level2">
+<h2>Our Model</h2>
+<p>We used a linear regression model for our prediction for transparency and ease of interpretation. Linear regression worked well with the size of the dataset, standardized nature of measurements, and predictors with known relationships in eviction literature. It is a stable model that avoids over-fitting. Fundamentally, the iterative and transparent nature of our method is optimal for policy-makers and mitigating equity concerns.</p>
+</section>
 <section id="where-are-evictions-happening" class="slide level2">
 <h2>Where Are Evictions Happening?</h2>
 
+
 <img data-src="images/ebytract.png" class="quarto-figure quarto-figure-center r-stretch" style="width:100.0%"></section>
-<section id="how-many-filings-occur-per-month" class="slide level2">
-<h2>How Many Filings Occur Per Month?</h2>
-
-<img data-src="images/emonth.png" class="quarto-figure quarto-figure-center r-stretch" style="width:100.0%"></section>
-<section id="who-are-these-evictions-affecting" class="slide level2">
-<h2>Who Are These Evictions Affecting?</h2>
-
-
-<img data-src="images/etractrace.png" class="quarto-figure quarto-figure-center r-stretch" style="width:100.0%"></section>
     </div>
   <div class="quarto-auto-generated-content" style="display: none;">
 <div class="footer footer-default">
