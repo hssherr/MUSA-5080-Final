@@ -78,8 +78,6 @@ We used a linear regression model for our prediction for transparency and ease o
 ## Spatial Cross-Validation
 
 ![](images/error.png){fig-align="center" width="100%"}
-## Conclusion
-
 
 ## Conclusion
 
