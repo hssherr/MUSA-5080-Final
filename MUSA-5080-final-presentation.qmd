@@ -51,10 +51,37 @@ How can we better predict where evictions will occur, so that we can effectively
 ## Our Model 
 We used a linear regression model for our prediction for transparency and ease of interpretation. Linear regression worked well with the size of the dataset, standardized nature of measurements, and predictors with known relationships in eviction literature. It is a stable model that avoids over-fitting. Fundamentally, the iterative and transparent nature of our method is optimal for policy-makers and mitigating equity concerns. 
 
-## Where Are Evictions Happening?
+## Exploratory Spatial Analysis
+::: {.slide style="overflow-y:scroll; height: 100%;"}
+| ![](images/ebytract.png) | ![](images/mva.png) | 
+|---------------|---------------|---------------|
+| ![](images/crime.png) | ![](images/hca.png) | 
+:::
 
-![](images/ebytract.png){fig-align="center" width="100%"}
+
+## Models
+- Model 0: Baseline (MAE: 1.382)
+- Model 1: + Demographic factors (MAE: 1.840)
+- Model 2: + Crime (MAE 1.834)
+- Model 3: + Housing Counseling Agency distance (1.832)
+- Model 4: + Market Value Analysis Ranking (1.821)
+- Model 5: + Eviction lags (1.672)
+
+
+## Model Performance
+
+![](images/test.png){fig-align="center" width="100%"}
+## Spatial Errors
+
+![](images/errors.png){fig-align="center" width="100%"}
+
+## Spatial Cross-Validation
+
+![](images/error.png){fig-align="center" width="100%"}
+## Conclusion
 
 
 
+## Conclusion
 
+Eviction lags were the strongest factor out of our linear regression models, with an MAE of 1.672. We therefore recommend this model to the City to help it reach its policy goals.

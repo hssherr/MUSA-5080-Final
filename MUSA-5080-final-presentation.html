@@ -189,11 +189,56 @@ Henry, Nina, Chloe, Ryan
 <h2>Our Model</h2>
 <p>We used a linear regression model for our prediction for transparency and ease of interpretation. Linear regression worked well with the size of the dataset, standardized nature of measurements, and predictors with known relationships in eviction literature. It is a stable model that avoids over-fitting. Fundamentally, the iterative and transparent nature of our method is optimal for policy-makers and mitigating equity concerns.</p>
 </section>
-<section id="where-are-evictions-happening" class="slide level2">
-<h2>Where Are Evictions Happening?</h2>
+<section id="exploratory-spatial-analysis" class="slide level2">
+<h2>Exploratory Spatial Analysis</h2>
+<div class="slide" style="overflow-y:scroll; height: 100%;">
+<table class="caption-top">
+<thead>
+<tr class="header">
+<th><img data-src="images/ebytract.png"></th>
+<th><img data-src="images/mva.png"></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><img data-src="images/crime.png"></td>
+<td><img data-src="images/hca.png"></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="models" class="slide level2">
+<h2>Models</h2>
+<ul>
+<li>Model 0: Baseline (MAE: 1.382)</li>
+<li>Model 1: + Demographic factors (MAE: 1.840)</li>
+<li>Model 2: + Crime (MAE 1.834)</li>
+<li>Model 3: + Housing Counseling Agency distance (1.832)</li>
+<li>Model 4: + Market Value Analysis Ranking (1.821)</li>
+<li>Model 5: + Eviction lags (1.672)</li>
+</ul>
+</section>
+<section id="model-performance" class="slide level2">
+<h2>Model Performance</h2>
+<p><img data-src="images/test.png" class="quarto-figure quarto-figure-center" style="width:100.0%"> ## Spatial Errors</p>
+<div class="quarto-figure quarto-figure-center">
+<figure>
+<p><img data-src="images/errors.png" class="quarto-figure quarto-figure-center" style="width:100.0%"></p>
+</figure>
+</div>
+</section>
+<section id="spatial-cross-validation" class="slide level2">
+<h2>Spatial Cross-Validation</h2>
+<p><img data-src="images/error.png" class="quarto-figure quarto-figure-center" style="width:100.0%"> ## Conclusion</p>
+</section>
+<section id="conclusion" class="slide level2">
+<h2>Conclusion</h2>
+<p>Eviction lags were the strongest factor out of our linear regression models, with an MAE of 1.672. We therefore recommend this model to the City to help it reach its policy goals.</p>
 
-
-<img data-src="images/ebytract.png" class="quarto-figure quarto-figure-center r-stretch" style="width:100.0%"></section>
+</section>
     </div>
   <div class="quarto-auto-generated-content" style="display: none;">
 <div class="footer footer-default">
