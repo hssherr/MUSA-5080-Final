@@ -13,7 +13,47 @@ editor_options:
     wrap: 72
 ---
 
-# Load Packages
+# Executive Summary
+
+Eviction is a pressing issue in the city of Philadelphia. Every year,
+thousands of households receive eviction filings. Not only is this
+destabilizing for the households involved, but it contributes to
+neighborhood instability, weakened social networks, and other
+socioeconomic effects that ultimately contribute to inequities. We
+produced a model to predict evictions by tract in Philadelphia in order
+to help the City mobilize resources and proactively implement targeted
+policies that prevent evictions.
+
+Our model uses eviction filing data for Philadelphia at the Census tract
+level, paired with crime, affordable housing, housing counseling, market
+value analysis, and Census data. We explore where and when evictions
+occur to build a svelte predictive model of monthly filings. We
+conducted exploratory data analysis after cleaning the data and joining
+it to 2020 Census tracts to examine spatial patterns of filings,
+temporal trends across the city, and differences across race-majority
+tracts. We then integrated multiple data sources to construct a panel
+dataset of monthly tract-level predictors from 2022 onward. 
+
+# Methods Overview
+
+We estimated a series of linear regression models that predict monthly
+eviction filings. These linear regressions included factors such as
+baseline eviction filing (using pre-pandemic averages), demographic
+characteristics, crime levels, distance to housing counseling agencies,
+neighborhood market value clusters, and recent eviction history
+(lagged). Models were trained on data through December 2023 and
+evaluated on 2024 onward through MAE.
+
+Generally, we found that adding socio-economic and neighborhood context
+modestly improves prediction accuracy. Incorporating recent eviction
+lags yields the strongest performance. However, the analysis also
+highlights key limitations: under-counting of sealed records,
+measurement error across data sources, and ethical concerns about
+predicting eviction risk for already-vulnerable communities. 
+
+# Process
+
+## Load Packages
 
 ```{r load-packages, message=FALSE}
 if(!require(pacman)){install.packages("pacman"); library(pacman, quietly = T)}
@@ -22,14 +62,22 @@ p_load(lubridate, sf, tidycensus, tidygeocoder, tidyverse, tigris, tmap, viridis
 set.seed(5746)
 ```
 
-# Load Data
+## Load Data
 
-## Evictions Dataset
+### Evictions Dataset
 
-This dataset, derived from the Evictions Lab's Eviction Tracking System.
-City-wide records that had missiong/incorrect GEOIDs are labeled as
-"sealed." This leads to a slight-to-moderate underestimation of
-evictions on average within the dataset.
+The primary dataset analyzed in this report was derived from the
+Evictions Lab's Eviction Tracking System, which has been derived from
+county court records for cities such as Philadelphia that have a
+reasonably transparent and accessible system of data storage. As a
+result, the breadth of records that are often available is limited by
+government/judicial cooperation. Furthermore, many city-wide records
+were incorrectly geocoded at the time of creation and labeled as
+"sealed." Therefore, evictions on average within this dataset are
+considered to be an underestimate of the true number of filings in
+Philadelphia This data is available at the census tract and zip code
+levels for Philadelphia between the years of 2020 and November of 2025
+at monthly intervals.
 
 ```{r load-data}
 # load evictions dataset to investigate
@@ -37,7 +85,6 @@ evictions_df <- read_csv("./data/philadelphia_monthly_2020_2021.csv", show_col_t
 
 evictions_df <- evictions_df %>%
   filter(GEOID != "sealed")
-
 ```
 
 ```{r missing-combos-check}
@@ -66,7 +113,18 @@ if (nrow(missing) > 0){
 }
 ```
 
-## Census Tracts
+The modeling strategy employed in this analysis relies on a panel
+dataset which has all combinations of census tract geographic
+identification numbers (geoids) and months. As of the 2020 Decennial
+Census and the subsequent realignment of census tract boundaries,
+Philadelphia County has 408 census tracts, with data spanning 71 months,
+resulting in 28,968 records. In anticipation of the availability of
+census data, which changed boundaries in 2020 and is only available up
+to 2023 (4 years total), the minimum year of evictions data considered
+in this analysis was 2022, reducing the overall number of records to
+19,176 (-33.8%).
+
+### Census Tracts
 
 ```{r load-census-tracts}
 # designate FIPS codes for PA and Philly
@@ -85,18 +143,12 @@ evictions <- left_join(evictions_df, tracts, by = "GEOID", ) %>%
          year_lag_census = year(my(month)) - 2)
 ```
 
-```{r month-year-cols}
-# manufacture month and year columns, convert existing month column to 'date'
-# evictions <- evictions %>% 
-#   rename(date = month) %>% 
-#   mutate(
-#     month = month(my(date)),
-#     year = year(my(date)),
-#     filings_2020_log = log(filings_2020 + 1)
-#   )
-```
+The evictions dataset does not include geometries, which instead can be
+derived from the Census Bureau's TIGER/line shapefiles. The boundaries
+used were derived from the 2020 Decennial Census and joined to based on
+geoid.
 
-# Exploratory Data Analysis - Evictions
+## Exploratory Data Analysis - Evictions
 
 ```{r create-date-format}
 # Create proper date format
@@ -108,7 +160,13 @@ evictions <- evictions %>%
   )
 ```
 
-## Total Filings Per Tract
+An average filing count calculated for before the COVID-19 pandemic were
+used to determine both a delta measure (difference from total filings in
+a month) and a ratio of filings in a month relative to this baseline.
+This was intended to indicate the relationship of filings at a given
+point in time to past trends.
+
+### Total Filings Per Tract
 
 ```{r create-total_filings}
 # Total filings per tract
@@ -129,23 +187,17 @@ ggplot(tract_totals) +
   theme_void()
 ```
 
-## Hotspots
+Total filings per census tract from 2022-2025 are distributed unevenly
+throughout Philadelphia, with West Philadelphia and North Philadelphia
+seeing far more evictions relative to more affluent areas of the city
+such as Center City and South Philadelphia. The greatest number of
+filings occurred in the Roxborough Neighborhood adjacent to the
+Wissahickon River, as well as on the northern edge of the Northeast
+Philadelphia Airport.
 
-```{r top-tracts}
-# Top 10 Tracts - Eviction Filing Hotspots
-tract_totals %>%
-  arrange(desc(total_filings)) %>%
-  slice_head(n = 10)
+### Temporal Trends
 
-# Bottom 10 Tracts
-tract_totals %>%
-  arrange(total_filings) %>%
-  slice_head(n = 10)
-```
-
-## Temporal Trends
-
-### Total Monthly Filings
+#### Total Monthly Filings
 
 ```{r create-monthly-evictions-plot}
 # Create monthly evictions
@@ -166,23 +218,16 @@ ggplot(eviction_monthly, aes(x = month_date, y = total_filings)) +
   )
 ```
 
-### Filings Over Time by Racial Majority
+Total eviction filings were extremely high at the onset of 2020 as a
+consequence of the COVID-19 pandemic, before plummeting sharply in the
+middle of the year. They continued to rise into 2023, and have been on a
+steady decline since. These rates fluctuate at times significantly from
+the trendline over time, but they do not appear to follow a seasonal or
+annual pattern.
 
-```{r evictions-by-race}
-evictions %>%
-  group_by(month_date, racial_majority) %>%
-  summarise(total_filings = sum(filings_2020, na.rm = TRUE), .groups = "drop") %>%
-  ggplot(aes(month_date, total_filings, color = racial_majority)) +
-  geom_line() +
-  labs(title = "Eviction Filings Over Time by Racial-Majority Tract",
-       x = "Date", y = "Total Filings",
-       color = "Racial Majority") +
-  theme_minimal()
-```
+### Descriptive Distributions
 
-## Descriptive Distributions
-
-### Distribution of Monthly Findings
+#### Distribution of Monthly Findings
 
 ```{r create-monthly-predictions-plot-by-tract}
 # Create monthly evictions
@@ -194,7 +239,7 @@ ggplot(evictions %>% filter(filings_2020 <= 50),
        x = "Filings", y = "Count")
 ```
 
-### Distribution of Delta
+#### Distribution of Delta
 
 ```{r change-from-baseline-distribution}
 # Distribution of Delta 
@@ -207,7 +252,7 @@ ggplot(evictions, aes(delta)) +
   )
 ```
 
-### Distribution of Ratio
+#### Distribution of Ratio
 
 ```{r change-from-baseline-distribution-ratio}
 # Distribution of Ratio 
@@ -220,7 +265,7 @@ ggplot(evictions, aes(ratio)) +
   )
 ```
 
-## Racial Disparaties
+### Racial Disparaties
 
 ```{r mean-filings-by-race}
 evictions %>%
@@ -237,9 +282,42 @@ evictions %>%
   theme(legend.position = "none")
 ```
 
-# Import Predictor Data
+### Filings Over Time by Racial Majority
 
-## Affordable Housing Production/Availability
+```{r evictions-by-race}
+evictions %>% 
+  group_by(month_date, racial_majority) %>%
+  summarise(total_filings = sum(filings_2020, na.rm = TRUE), .groups = "drop") %>%
+  ggplot(aes(month_date, total_filings, color = racial_majority)) +
+  geom_line() +
+  labs(title = "Eviction Filings Over Time by Racial-Majority Tract",
+       x = "Date",
+       y = "Total Filings",
+       color = "Racial Majority") +
+  theme_minimal()
+```
+
+Rates of evictions in majority-Black census tracts are consistently
+higher than those of majority-White census tracts. While
+majority-Hispanic census tracts appear to have lower eviction totals on
+average compared to majority-White census tracts, it is important to
+note that there are significantly fewer majority-Hispanic census tracts
+within the dataset (Hispanic = 5.6%, White = 36.0%, Black = 35.8%, Other
+= 22.6%), which obscures potentially high rates of Hispanic household
+evictions in census tracts where other race categories dominate.
+
+## Import Predictor Data
+
+### Affordable Housing Production/Availability
+
+Affordable and public housing developments have been found by the
+Eviction Lab to be associated with higher-than-normal rates of eviction
+filings against tenants, resulting in a pattern of "serial eviction"
+([Eviction Lab,
+2023](https://evictionlab.org/public-housing-and-the-threat-of-eviction/)).
+Affordable housing productions and inventories in Philadelphia for
+approximately the past six years are explored below as a potential
+predictor.
 
 ```{r import-affordable-housing}
 housing_sf <- st_read('./data/Affordable_Housing.geojson', quiet = T) %>% 
@@ -250,6 +328,20 @@ housing <- housing_sf %>%
   filter(!is.na(fiscal_year_complete),
          !st_is_empty(.)) %>% 
   st_join(tracts, join = st_within)
+```
+
+```{r message=FALSE}
+
+housing_cnts <- housing %>% 
+  st_drop_geometry() %>% 
+  group_by(GEOID, fiscal_year_complete) %>% 
+  summarise(n_proj = n(),
+            total_units = sum(total_units)) %>%
+  mutate(n_proj_cum = ave(n_proj, FUN = cumsum),
+         total_units_cum = ave(total_units, FUN = cumsum)) %>% 
+  filter(fiscal_year_complete >= 2020) %>% 
+  left_join(tracts, by = "GEOID") %>% 
+  st_as_sf(crs = 2272)
 ```
 
 ```{r viz-affordable-housing}
@@ -268,23 +360,10 @@ ggplot() +
   theme_void()
 ```
 
-Create summary counts of the number of affordable housing units have
-been constructed per census tract up to the year. Also create an
-indicator variable showing if there was affordable housing built in the
-census tract.
-
-```{r message=FALSE}
-housing_cnts <- housing %>% 
-  st_drop_geometry() %>% 
-  group_by(GEOID, fiscal_year_complete) %>% 
-  summarise(n_proj = n(),
-            total_units = sum(total_units)) %>%
-  mutate(n_proj_cum = ave(n_proj, FUN = cumsum),
-         total_units_cum = ave(total_units, FUN = cumsum)) %>% 
-  filter(fiscal_year_complete >= 2020) %>% 
-  left_join(tracts, by = "GEOID") %>% 
-  st_as_sf(crs = 2272)
-```
+Affordable housing locations in Philadelphia are spatially concentrated
+immediately north and south of Center City as well as Northwest
+Philadelphia. Notable areas devoid of affordable housing developments
+are Northeast Philadelphia and
 
 ```{r}
 ggplot() +
@@ -294,7 +373,7 @@ ggplot() +
   theme_void()
 ```
 
-## Crime
+### Crime
 
 ```{r load-crime}
 # Path to the main directory that contains the crimeXXXX folders
@@ -333,7 +412,8 @@ crime_cnts <- crime_tract %>%
   complete(data = ., GEOID, month, fill = list(count = 0))
 ```
 
-## Crime EDA
+#### Crime EDA
+
 ```{r message=FALSE}
 # Fix date format
 crime_cnts <- crime_cnts %>% 
@@ -415,7 +495,8 @@ ggplot(crime_map) +
   ) +
   theme_void()
 ```
-## Market Value Analysis
+
+### Market Value Analysis
 
 ```{r}
 # read in results of 
@@ -448,6 +529,7 @@ mva_ranks <- mva %>%
 ```
 
 ### Market Value Analysis - EDA
+
 ```{r}
 mva_ranks %>% 
   summarise(
@@ -488,6 +570,7 @@ ggplot(mva_ranks_sf) +
   ) +
   theme_void()
 ```
+
 ## Housing Counseling Agencies
 
 ```{r}
@@ -518,6 +601,7 @@ hca_dist <- tracts %>%
 ```
 
 ### Housing Counseling Agencies - EDA
+
 ```{r warning=FALSE}
 # Histogram Distance to nearest HCA
 ggplot(hca_dist, aes(dist_1hca)) +
@@ -550,6 +634,7 @@ ggplot(hca_dist, aes(dist_1hca, dist_3hca)) +
   )
 
 ```
+
 ```{r warning=FALSE}
 # Map dist to nearest HCA
 ggplot(hca_dist) +
@@ -617,7 +702,7 @@ data_model <- left_join(data_3, demo_vars,   by = c("GEOID", "year_lag_census")
 
 #Predictive Modelling
 
-Building complexity over multiple models 
+Building complexity over multiple models
 
 #create lag variables
 
@@ -665,7 +750,8 @@ summary(test_data$month_date)
 
 
 ```
-#Model 0 Baseline 
+
+#Model 0 Baseline
 
 ```{r add variables}
 
@@ -678,8 +764,7 @@ summary(model_0)
 
 ```
 
-
-#Model 1 Demographics 
+#Model 1 Demographics
 
 ```{r demographics }
 
@@ -718,7 +803,6 @@ summary(model_1)
 
 ```
 
-
 #Model 2 Crime
 
 ```{r model prep crime}
@@ -752,8 +836,7 @@ summary(model_2)
 
 ```
 
-
-#Model 3 HCA Distances 
+#Model 3 HCA Distances
 
 ```{r HCA prep}
 train_data <- train_data %>%
@@ -770,7 +853,6 @@ test_data <- test_data %>%
 
 
 ```
-
 
 ```{r HCA}
 
@@ -793,10 +875,10 @@ summary(model_3)
 
 ```
 
+#Model 4 Affordable Housing and mva
 
-#Model 4 Affordable Housing and mva 
-
-#still need to add count to affordable housing but need to change name of column 
+#still need to add count to affordable housing but need to change name
+of column
 
 ```{r mva prep}
 train_data <- train_data %>%
@@ -830,9 +912,7 @@ summary(model_4)
 
 ```
 
-
 #Model 6 Eviction Lags
-
 
 ```{r temporal variables}
 
@@ -854,9 +934,8 @@ summary(model_5)
 
 ```
 
-
-
 # Calculate Predictions and MAE
+
 ```{r calculate_mae_evictions}
 # Generate predictions
 test_data <- test_data %>%
@@ -898,8 +977,8 @@ knitr::kable(
 )
 ```
 
+# Visualize Model Comparison
 
-# Visualize Model Comparison 
 ```{r visualize model comparison}
 
 mae_results <- mae_results %>%
@@ -919,10 +998,9 @@ ggplot(mae_results, aes(x = Model, y = MAE)) +
   )
 ```
 
+#Spatial Errors
 
-#Spatial Errors 
-
-TBD 
+TBD
 
 #Temporal Errors
 
