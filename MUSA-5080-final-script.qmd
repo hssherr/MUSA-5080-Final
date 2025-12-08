@@ -17,7 +17,7 @@ editor_options:
 
 ```{r load-packages, message=FALSE}
 if(!require(pacman)){install.packages("pacman"); library(pacman, quietly = T)}
-p_load(lubridate, sf, tidycensus, tidygeocoder, tidyverse, tigris, tmap, viridis)
+p_load(lubridate, sf, tidycensus, tidygeocoder, tidyverse, tigris, tmap, viridis, ggplot2, gridExtra)
 
 set.seed(5746)
 ```
@@ -621,20 +621,18 @@ Building complexity over multiple models
 
 #create lag variables
 
-```{r lag and rolling average prep}
-
+```{r lag-prep}
 data_model <- data_model %>%
+  mutate(
+    month_date = as.Date(paste0("01/", month), format = "%d/%m/%Y")
+  ) %>%
   arrange(GEOID, month_date) %>%
   group_by(GEOID) %>%
   mutate(
-    # one month and two month lags
     lag_1 = lag(filings_2020, 1),
-    lag_2 = lag(filings_2020, 2),
-
+    lag_2 = lag(filings_2020, 2)
   ) %>%
   ungroup()
-
-
 
 ```
 
@@ -831,7 +829,7 @@ summary(model_4)
 ```
 
 
-#Model 6 Eviction Lags
+#Model 5 Eviction Lags
 
 
 ```{r temporal variables}
@@ -921,9 +919,338 @@ ggplot(mae_results, aes(x = Model, y = MAE)) +
 
 
 #Spatial Errors 
+```{r spatial errors}
 
-TBD 
+
+#testing
+
+test_data <- test_data %>%
+  mutate(
+    pred_5  = predict(model_5, newdata = .),
+    resid_5 = filings_2020 - pred_5,
+    abs_resid_5 = abs(resid_5)
+  )
+
+# Aggregate errors by tract
+tract_errors <- test_data %>%
+  st_drop_geometry() %>%
+  group_by(GEOID) %>%
+  summarise(
+    MAE_5        = mean(abs_resid_5, na.rm = TRUE),
+    avg_filings  = mean(filings_2020, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  left_join(tracts, by = "GEOID") %>%
+  st_as_sf()
+
+# Map 1: Prediction Errors (MAE)
+p1 <- ggplot(tract_errors) +
+  geom_sf(aes(fill = MAE_5), color = NA) +
+  scale_fill_viridis_c(
+    option = "plasma",
+    name = "MAE\n(filings)"
+  ) +
+  labs(
+    title = "Prediction Errors by Census Tract",
+    subtitle = "Mean Absolute Error (Model 5, Test Period)"
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(size = 14, face = "bold"),
+    plot.subtitle = element_text(size = 10)
+  )
+
+# Map 2: Average Filings
+p2 <- ggplot(tract_errors) +
+  geom_sf(aes(fill = avg_filings), color = NA) +
+  scale_fill_viridis_c(
+    option = "viridis",
+    name = "Avg Monthly\nFilings"
+  ) +
+  labs(
+    title = "Average Eviction Filings by Census Tract",
+    subtitle = "Test Period Only"
+  ) +
+  theme_void() +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(size = 14, face = "bold"),
+    plot.subtitle = element_text(size = 10)
+  )
+
+# Side-by-side
+gridExtra::grid.arrange(p1, p2, ncol = 2)
+```
 
 #Temporal Errors
 
-TBD
+```{r temporal errors all models}
+
+#month_date is date
+test_data <- test_data %>%
+  mutate(month_date = as.Date(month_date))
+
+# prediction columns 
+pred_cols <- grep("^pred_", names(test_data), value = TRUE)
+
+if (length(pred_cols) == 0) {
+  stop("No prediction columns found in test_data. 
+       Make sure pred_0, pred_1, ..., pred_5 exist before running temporal error code.")
+}
+
+# Long-form table
+temporal_errors_all <- test_data %>%
+  sf::st_drop_geometry() %>%
+  select(month_date, filings_2020, all_of(pred_cols)) %>%
+  pivot_longer(
+    cols = all_of(pred_cols),
+    names_to = "model_short",
+    values_to = "prediction"
+  ) %>%
+  mutate(
+    abs_error = abs(filings_2020 - prediction),
+    model = dplyr::case_when(
+      model_short == "pred_0" ~ "0. Baseline",
+      model_short == "pred_1" ~ "1. + Demographics",
+      model_short == "pred_2" ~ "2. + Crime",
+      model_short == "pred_3" ~ "3. + HCA Distance",
+      model_short == "pred_4" ~ "4. + MVA Rank",
+      model_short == "pred_5" ~ "5. + Lags",
+      TRUE ~ model_short
+    )
+  )
+
+# Temporal MAE by month & model
+temporal_mae_all <- temporal_errors_all %>%
+  group_by(month_date, model) %>%
+  summarise(
+    MAE = mean(abs_error, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Plot MAE over time for all models
+ggplot(temporal_mae_all, aes(x = month_date, y = MAE, color = model)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 1.4) +
+  labs(
+    title = "Temporal Prediction Errors by Model",
+    subtitle = "Mean Absolute Error (MAE) over time on test data",
+    x = "Month",
+    y = "MAE (filings)",
+    color = "Model"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1)
+  )
+
+```
+
+#Demographic Errors 
+
+```{r tract_mae_demographics}
+# Compute absolute residuals for Model 5
+test_data <- test_data %>%
+  mutate(
+    resid_5 = filings_2020 - pred_5,
+    abs_resid_5 = abs(resid_5)
+  )
+
+# Aggregate to tract level
+tract_errors_demo <- test_data %>%
+  st_drop_geometry() %>%
+  group_by(GEOID) %>%
+  summarise(
+    MAE_5 = mean(abs_resid_5, na.rm = TRUE),
+    pct_nonwhite = mean(pct_nonwhite, na.rm = TRUE),
+    pop_tot = mean(pop_totE, na.rm = TRUE),
+    hh_fam_share = mean(hh_fam_share, na.rm = TRUE),
+    units_per_hh = mean(units_per_hh, na.rm = TRUE),
+    crime_cnt = mean(crime_cnt, na.rm = TRUE),
+    rank = first(rank),
+    .groups = "drop"
+  )
+```
+
+
+```{r errors demographics}
+
+p1 <- ggplot(tract_errors_demo, aes(x = pct_nonwhite, y = MAE_5)) +
+  geom_point(alpha = 0.5, color = "#3182bd") +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs(
+    title = "Prediction Error vs. Racial Composition",
+    x = "Percent Nonwhite",
+    y = "MAE (Model 5)"
+  ) +
+  theme_minimal()
+
+p2 <- ggplot(tract_errors_demo, aes(x = crime_cnt, y = MAE_5)) +
+  geom_point(alpha = 0.5, color = "#3182bd") +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs(
+    title = "Prediction Error vs. Crime Rate",
+    x = "Crime Count",
+    y = "MAE (Model 5)"
+  ) +
+  theme_minimal()
+
+p3 <- ggplot(tract_errors_demo, aes(x = units_per_hh, y = MAE_5)) +
+  geom_point(alpha = 0.5, color = "#3182bd") +
+  geom_smooth(method = "lm", se = FALSE, color = "red") +
+  labs(
+    title = "Prediction Error vs. Housing Stock Pressure",
+    x = "Units per Household",
+    y = "MAE (Model 5)"
+  ) +
+  theme_minimal()
+
+grid.arrange(p1, p2, p3, ncol = 2)
+
+```
+
+
+#Model 6 - FINAL FIT
+```{r model 6}
+model_6 <- lm(
+  filings_2020 ~ 
+    filings_avg_prepandemic_baseline +
+    pct_nonwhite + 
+    crime_cnt +
+    lag_1 + lag_2,
+  data = train_data
+)
+
+summary(model_6)
+
+```
+```{r MAE Model 6}
+test_data$pred_6 <- predict(model_6, newdata = test_data)
+
+mae_6 <- mean(abs(test_data$filings_2020 - test_data$pred_6), na.rm = TRUE)
+mae_6
+
+```
+#Spatial CV Cross Validation 
+
+#Spatial Folds
+```{r spatial folds}
+
+sf_data <- data_model %>%
+  mutate(
+    pct_nonwhite = 1 - (pop_whiteE / pop_totE),
+    hh_fam_share = hh_famE / hh_totE,
+    units_per_hh = units_totE / hh_totE,
+    crime_cnt    = as.numeric(count),
+    dist_1hca    = as.numeric(dist_1hca),
+    dist_3hca    = as.numeric(dist_3hca),
+    rank         = factor(rank)
+  ) %>%
+  filter(!is.na(filings_2020)) %>%
+  st_as_sf()   # ensure it's sf
+```
+
+```{r}
+# Get tract centroids and coordinates
+centroids <- sf::st_centroid(sf_data)
+coords    <- sf::st_coordinates(centroids)  # matrix with X, Y
+
+set.seed(5746)
+k_folds <- 5
+
+km <- kmeans(coords, centers = k_folds, nstart = 25)
+
+# fold
+sf_data <- sf_data %>%
+  mutate(fold_id = km$cluster)
+table(sf_data$fold_id)
+
+```
+
+```{r spatial cv}
+
+# Model 5: full + lags
+form_5 <- filings_2020 ~ 
+  filings_avg_prepandemic_baseline +
+  pop_totE + pct_nonwhite + hh_totE + hh_fam_share +
+  units_totE + units_per_hh +
+  crime_cnt +
+  dist_1hca + dist_3hca +
+  rank +
+  lag_1 + lag_2
+
+results_model5 <- purrr::map_df(1:5, function(f) {
+
+  train_set <- sf_data %>% filter(fold_id != f)
+  test_set  <- sf_data %>% filter(fold_id == f)
+
+  mod5 <- lm(form_5, data = train_set)
+
+  test_set$pred5 <- predict(mod5, newdata = test_set)
+
+  tibble(
+    fold = f,
+    model = "Model 5",
+    MAE = mean(abs(test_set$filings_2020 - test_set$pred5), na.rm = TRUE)
+  )
+})
+```
+
+#Model 6 Spatial CV
+```{r model 6 CV}
+form_6 <- filings_2020 ~ 
+  filings_avg_prepandemic_baseline +
+  pct_nonwhite + 
+  crime_cnt +
+  lag_1 + lag_2
+
+results_model6 <- purrr::map_df(1:5, function(f) {
+
+  train_set <- sf_data %>% filter(fold_id != f)
+  test_set  <- sf_data %>% filter(fold_id == f)
+
+  mod6 <- lm(form_6, data = train_set)
+
+  test_set$pred6 <- predict(mod6, newdata = test_set)
+
+  tibble(
+    fold = f,
+    model = "Model 6",
+    MAE = mean(abs(test_set$filings_2020 - test_set$pred6), na.rm = TRUE)
+  )
+})
+```
+
+
+```{r}
+spatial_results <- bind_rows(results_model5, results_model6)
+
+spatial_results
+```
+```{r plot spatial cv}
+
+ggplot(spatial_results, aes(x = factor(fold), y = MAE, fill = model)) +
+  geom_col(position = "dodge") +
+  scale_fill_manual(
+    values = c(
+      "Model 5" = "#3182bd",
+      "Model 6" = "#31a354"
+    )
+  ) +
+  labs(
+    title = "Spatial Cross-Validation MAE Across Folds",
+    subtitle = "Comparing Model 5 (full + lags) vs. Model 6 (reduced + lags)",
+    x = "Spatial Fold (k-means cluster)",
+    y = "MAE (filings)",
+    fill = "Model"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    legend.position = "top",
+    axis.text.x = element_text(size = 11)
+  )
+```
+
+
+
