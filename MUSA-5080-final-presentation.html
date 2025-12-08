@@ -6,8 +6,8 @@
 <script src="MUSA-5080-final-presentation_files/libs/quarto-html/tippy.umd.min.js"></script>
 <link href="MUSA-5080-final-presentation_files/libs/quarto-html/tippy.css" rel="stylesheet">
 <link href="MUSA-5080-final-presentation_files/libs/quarto-html/light-border.css" rel="stylesheet">
-<link href="MUSA-5080-final-presentation_files/libs/quarto-html/quarto-syntax-highlighting-ea385d0e468b0dd5ea5bf0780b1290d9.css" rel="stylesheet" id="quarto-text-highlighting-styles"><meta charset="utf-8">
-  <meta name="generator" content="quarto-1.7.33">
+<link href="MUSA-5080-final-presentation_files/libs/quarto-html/quarto-syntax-highlighting-dc55a5b9e770e841cd82e46aadbfb9b0.css" rel="stylesheet" id="quarto-text-highlighting-styles"><meta charset="utf-8">
+  <meta name="generator" content="quarto-1.8.24">
 
   <meta name="author" content="Henry, Nina, Chloe, Ryan">
   <title>Predicting Eviction Risk in Philadelphia</title>
@@ -29,7 +29,7 @@
       vertical-align: middle;
     }
   </style>
-  <link rel="stylesheet" href="MUSA-5080-final-presentation_files/libs/revealjs/dist/theme/quarto-f563837468303362081e247dddd440d0.css">
+  <link rel="stylesheet" href="MUSA-5080-final-presentation_files/libs/revealjs/dist/theme/quarto-534cd8e3a96973385dffff3f4709048d.css">
   <link rel="stylesheet" href="styles/style.css">
   <link href="MUSA-5080-final-presentation_files/libs/revealjs/plugin/quarto-line-highlight/line-highlight.css" rel="stylesheet">
   <link href="MUSA-5080-final-presentation_files/libs/revealjs/plugin/reveal-menu/menu.css" rel="stylesheet">
@@ -193,13 +193,6 @@ Henry, Nina, Chloe, Ryan
 <h2>Exploratory Spatial Analysis</h2>
 <div class="slide" style="overflow-y:scroll; height: 100%;">
 <table class="caption-top">
-<thead>
-<tr class="header">
-<th><img data-src="images/ebytract.png"></th>
-<th><img data-src="images/mva.png"></th>
-<th></th>
-</tr>
-</thead>
 <tbody>
 <tr class="odd">
 <td><img data-src="images/crime.png"></td>
@@ -214,11 +207,12 @@ Henry, Nina, Chloe, Ryan
 <h2>Models</h2>
 <ul>
 <li>Model 0: Baseline (MAE: 1.382)</li>
-<li>Model 1: + Demographic factors (MAE: 1.840)</li>
-<li>Model 2: + Crime (MAE 1.834)</li>
+<li>Model 1: + Demographic factors (1.840)</li>
+<li>Model 2: + Crime (1.834)</li>
 <li>Model 3: + Housing Counseling Agency distance (1.832)</li>
 <li>Model 4: + Market Value Analysis Ranking (1.821)</li>
 <li>Model 5: + Eviction lags (1.672)</li>
+<li><strong>Model 6: Refined Predictors (1.666)</strong></li>
 </ul>
 </section>
 <section id="model-performance" class="slide level2">
@@ -233,9 +227,26 @@ Henry, Nina, Chloe, Ryan
 <h2>Spatial Cross-Validation</h2>
 
 <img data-src="images/error.png" class="quarto-figure quarto-figure-center r-stretch" style="width:100.0%"></section>
+<section id="future-considerations" class="slide level2">
+<h2>Future Considerations</h2>
+
+<img data-src="images/temp.png" class="quarto-figure quarto-figure-center r-stretch" style="width:100.0%"></section>
+<section id="future-considerations-1" class="slide level2">
+<h2>Future Considerations</h2>
+<ul>
+<li>Explore impact of policy changes, economic shifts, major events, or shifting social attitudes and wrap into future modeling</li>
+<li>Include more specific/accurate temporal variables</li>
+<li>Fold in rolling averages to smooth out the past to help predict the future</li>
+</ul>
+</section>
 <section id="conclusion" class="slide level2">
 <h2>Conclusion</h2>
-<p>Eviction lags were the strongest factor out of our linear regression models, with an MAE of 1.672. We therefore recommend this model to the City to help it reach its policy goals.</p>
+<p>We present Model 6 as our final model:</p>
+<ul>
+<li>Reduced variable set to include average pre-pandemic eviction filings, percent non-white resident households, crime counts, and lagged eviction counts both by one month and by two months</li>
+<li>This indicates that crime counts and the past history of evictions in a tract are strong indicators of whether evictions will occur in the future</li>
+<li>Reinforces that evictions within a community perpetuate cycles of crime, poverty, and disinvestment that only contribute to additional risk of evictions&nbsp;in&nbsp;the&nbsp;future</li>
+</ul>
 
 </section>
     </div>
@@ -427,7 +438,7 @@ Henry, Nina, Chloe, Ryan
         margin: 0.1,
 
         math: {
-          mathjax: 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.9/MathJax.js',
+          mathjax: 'https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js',
           config: 'TeX-AMS_HTML-full',
           tex2jax: {
             inlineMath: [['\\(','\\)']],
@@ -501,13 +512,14 @@ Henry, Nina, Chloe, Ryan
           e.clearSelection();
         }
         const getTextToCopy = function(trigger) {
-            const codeEl = trigger.previousElementSibling.cloneNode(true);
-            for (const childEl of codeEl.children) {
-              if (isCodeAnnotation(childEl)) {
-                childEl.remove();
-              }
+          const outerScaffold = trigger.parentElement.cloneNode(true);
+          const codeEl = outerScaffold.querySelector('code');
+          for (const childEl of codeEl.children) {
+            if (isCodeAnnotation(childEl)) {
+              childEl.remove();
             }
-            return codeEl.innerText;
+          }
+          return codeEl.innerText;
         }
         const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
           text: getTextToCopy
